@@ -28,6 +28,9 @@
 
 #define N_COLS 5
 #define N_ROWS 7
+#define N_DOTS_ON_MAX 2
+
+#define N_SUBFRAMES (((N_ROWS + N_DOTS_ON_MAX - 1)/ N_DOTS_ON_MAX) * N_COLS)
 
 struct ledmatrix_frame {
     uint8_t cols[N_COLS];
@@ -48,7 +51,7 @@ struct ledmatrix_frame {
       GETCOLDOT_(i_col, 6, r6)  \
     )
 
-#define FRAME(r0,r1,r2,r3,r4,r5,r6) \
+#define LEDMATRIX_FRAME_INIT(r0,r1,r2,r3,r4,r5,r6) \
     {{ \
         GETCOL_(0, r0,r1,r2,r3,r4,r5,r6), \
         GETCOL_(1, r0,r1,r2,r3,r4,r5,r6), \
@@ -57,13 +60,18 @@ struct ledmatrix_frame {
         GETCOL_(4, r0,r1,r2,r3,r4,r5,r6), \
     }}
 
+#define LEDMATRIX_FRAME_SET(f, r0,r1,r2,r3,r4,r5,r6) \
+    do { \
+        (f)->cols[0] = GETCOL_(0, r0,r1,r2,r3,r4,r5,r6); \
+        (f)->cols[1] = GETCOL_(1, r0,r1,r2,r3,r4,r5,r6); \
+        (f)->cols[2] = GETCOL_(2, r0,r1,r2,r3,r4,r5,r6); \
+        (f)->cols[3] = GETCOL_(3, r0,r1,r2,r3,r4,r5,r6); \
+        (f)->cols[4] = GETCOL_(4, r0,r1,r2,r3,r4,r5,r6); \
+    } while(0)
+
 extern void ledmatrix_setup(void);
 
-extern void ledmatrix_draw_col(int i_col, uint8_t dots);
-
-extern void ledmatrix_draw_frame_col(const struct ledmatrix_frame *f, int i_col);
-
-extern void ledmatrix_draw_next_col(const struct ledmatrix_frame *f);
+extern void ledmatrix_draw_next_subframe(const struct ledmatrix_frame *f);
 
 #endif /* LEDMATRIX_H */
 

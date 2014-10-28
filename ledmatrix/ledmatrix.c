@@ -114,12 +114,7 @@ void draw_dots(uint8_t dots)
     draw_dots_portb(dots);
 }
 
-void ledmatrix_setup(void)
-{
-	cols_setup();
-    rows_setup();
-}
-
+static
 void ledmatrix_draw_col(int i_col, uint8_t dots)
 {
     cols_off();
@@ -127,20 +122,33 @@ void ledmatrix_draw_col(int i_col, uint8_t dots)
     col_on(i_col);
 }
 
-void ledmatrix_draw_frame_col(const struct ledmatrix_frame *f, int i_col)
+void ledmatrix_setup(void)
 {
-    ledmatrix_draw_col(i_col, f->cols[i_col]);
+	cols_setup();
+    rows_setup();
 }
 
-void ledmatrix_draw_next_col(const struct ledmatrix_frame *f)
+void ledmatrix_draw_next_subframe(const struct ledmatrix_frame *f)
 {
     static int i_next_col = 0;
-    
-    ledmatrix_draw_frame_col(f, i_next_col);
-    i_next_col++;
-    if (i_next_col == N_COLS)
+    static int i_next_row = 0;
+
+    uint8_t dots;
+    uint8_t dots_mask = (1<<N_DOTS_ON_MAX)-1;
+
+    dots = f->cols[i_next_col];
+    dots_mask <<= i_next_row;
+    dots &= dots_mask;
+    ledmatrix_draw_col(i_next_col, dots);
+    i_next_row += N_DOTS_ON_MAX;
+    if (i_next_row >= N_ROWS)
     {
-        i_next_col = 0;
+        i_next_row = 0;
+        i_next_col++;
+        if (i_next_col == N_COLS)
+        {
+            i_next_col = 0;
+        }
     }
 }
 

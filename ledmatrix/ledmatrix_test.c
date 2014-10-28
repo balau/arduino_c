@@ -19,9 +19,14 @@
 #include <util/delay.h>
 #include "ledmatrix.h"
 
+#define FRAME_RATE_HZ 50
+#define SUBFRAME_RATE_HZ (FRAME_RATE_HZ * N_SUBFRAMES)
+#define SUBFRAME_DELAY_US (1000000 / SUBFRAME_RATE_HZ)
+
 int main(void)
 {
-    struct ledmatrix_frame fB = FRAME(
+    struct ledmatrix_frame fB =
+        LEDMATRIX_FRAME_INIT(
             11110,
             10001,
             10001,
@@ -29,12 +34,13 @@ int main(void)
             10001,
             10001,
             11110);
+
     ledmatrix_setup();
 
     while(1)
     {
-        ledmatrix_draw_next_col(&fB);
-        _delay_ms(4);
+        ledmatrix_draw_next_subframe(&fB);
+        _delay_us(SUBFRAME_DELAY_US);
     }
     return 0;
 }
