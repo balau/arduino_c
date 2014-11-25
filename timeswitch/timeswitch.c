@@ -16,33 +16,40 @@
  *    You should have received a copy of the GNU Lesser General Public License
  *    along with arduino_c.  If not, see <http://www.gnu.org/licenses/>.
  */
+#include <stdbool.h>
 #include <avr/io.h>
 #include <avr/interrupt.h>
+#include <avr/sleep.h>
 
 #define T1_MAX 0xFFFFUL
-#define T1_TICK_US 64
-#define T1_PRESCALER (_BV(CS10)|_BV(CS12)) /* 1024 */
+#define T1_PRESCALER 1024
+#define T1_TICK_US (T1_PRESCALER/(F_CPU/1000000UL)) /* 64us @ 16MHz */
+#define T1_MAX_US (T1_TICK_US * T1_MAX) /* ~4.2s @ 16MHz */
 
-static
-void light(int on_off);
-
-static
-void light_toggle(void);
-
-static
-void light_init(void);
-
-
-static
-void timer_stop(void)
+static void led_on(void)
 {
-    TCCR1B &= ~(_BV(CS10)|_BV(CS11)|_BV(CS12));
-    TIMSK1 &= ~_BV(TOIE1);
-    TIFR1 |= _BV(TOV1);
+    PORTB |= _BV(PORTB5);
 }
 
-static
-void timer_init(void)
+static void led_off(void)
+{
+    PORTB &= ~_BV(PORTB5);
+}
+
+static void led_init(void)
+{
+	DDRB |= _BV(DDB5); /* PORTB5 as output */
+    led_off();
+}
+
+static void timer_stop(void)
+{
+    TCCR1B &= ~(_BV(CS10)|_BV(CS11)|_BV(CS12)); /* stop timer clock */
+    TIMSK1 &= ~_BV(TOIE1); /* disable interrupt */
+    TIFR1 |= _BV(TOV1); /* clear interrupt flag */
+}
+
+static void timer_init(void)
 {
     /* normal mode */
     TCCR1A &= ~(_BV(WGM10)|_BV(WGM11));
@@ -50,110 +57,83 @@ void timer_init(void)
     timer_stop();
 }
 
-static
-void timer_start(unsigned long us)
+static void timer_start(unsigned long us)
 {
-    unsigned long ticks;
-    unsigned short tcnt;
+    unsigned long ticks_long;
+    unsigned short ticks;
 
-    ticks = us / T1_TICK_US;
-
-    if (ticks > T1_MAX)
+    ticks_long = us / T1_TICK_US;
+    if (ticks_long >= T1_MAX)
     {
-        tcnt = 0;
+        ticks = T1_MAX;
     }
     else
     {
-        tcnt = -ticks-1;
+        ticks = ticks_long;
     }
-    TCNT1 = tcnt;
-    /* enable interrupt */
-    TIMSK1 |= _BV(TOIE1);
-    /* start */
+    TCNT1 = T1_MAX - ticks; /* overflow in ticks*1024 clock cycles */
+
+    TIMSK1 |= _BV(TOIE1); /* enable overflow interrupt */
+    /* start timer clock */
     TCCR1B &= ~(_BV(CS10)|_BV(CS11)|_BV(CS12));
-    TCCR1B |= T1_PRESCALER;
+    TCCR1B |= _BV(CS10)|_BV(CS12); /* prescaler: 1024 */
 }
 
-static
-void timer_start_ms(unsigned short ms)
+static void timer_start_ms(unsigned short ms)
 {
     timer_start(ms * 1000UL);
 }
 
-static int switch_on = 0;
+static bool button_event = false;
 
-ISR(TIMER1_OVF_vect)
+ISR(TIMER1_OVF_vect) /* timer 1 interrupt service routine */
 {
     timer_stop();
-    if (bit_is_clear(PINB, PINB4))
+    if(button_event)
     {
-        /* button pressed */
-        light(1);
-        switch_on = 1;
-    }
-    else
-    {
-        if (switch_on)
+        if (bit_is_clear(PINB, PINB4))
         {
-            timer_start_ms(20000);
-            switch_on = 0;
+            /* button pressed */
+            led_on(); /* Turn on LED immediately */
         }
         else
         {
-            light(0);
+            /* button released */
+            timer_start_ms(2000); /* timeout to turn off LED */
         }
-    }
-}
-
-static
-void light(int on_off)
-{
-    if (on_off)
-    {
-        PORTB |= _BV(PORTB5);
+        button_event = false; /* clear flag */
     }
     else
     {
-		PORTB &= ~_BV(PORTB5);
+        /* timeout expired: turn off LED */
+        led_off();
     }
 }
 
-static
-void light_toggle(void)
+ISR(PCINT0_vect) /* pin change interrupt service routine */
 {
-    light(bit_is_clear(PORTB, PORTB5));
+    button_event = true; /* flag indicating that next timer
+                            interrupt is due to button */
+    timer_start_ms(10); /* to reduce bounce effect. */
 }
 
-static
-void light_init(void)
+static void button_init(void)
 {
-	/* set pin 5 of PORTB for output*/
-	DDRB |= _BV(DDB5);
-}
-
-ISR(PCINT0_vect)
-{
-    timer_start_ms(10);
-}
-
-static
-void button_init(void)
-{
-    DDRB &= ~_BV(DDB4); /* PORTB4 Input */
-    PORTB |= _BV(PORTB4); /* Enable pull-up */
-    PCICR |= _BV(PCIE0);
+    DDRB &= ~_BV(DDB4); /* PORTB4 as input */
+    PORTB |= _BV(PORTB4); /* enable pull-up */
+    PCICR |= _BV(PCIE0); /* enable Pin Change 0 interrupt */
     PCMSK0 |= _BV(PCINT4); /* PORTB4 is also PCINT4 */
 }
 
 int main (void)
 {
-    light_init();
+    led_init();
     button_init();
     timer_init();
-    sei();
-    while(1)
+    sei(); /* enable interrupts globally */
+    while(true)
     {
+        sleep_mode();
     }
-	return 0;
 }
 
