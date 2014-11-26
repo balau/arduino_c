@@ -84,37 +84,20 @@ static void timer_start_ms(unsigned short ms)
     timer_start(ms * 1000UL);
 }
 
-static bool button_event = false;
-
 ISR(TIMER1_OVF_vect) /* timer 1 interrupt service routine */
 {
     timer_stop();
-    if(button_event)
-    {
-        if (bit_is_clear(PINB, PINB4))
-        {
-            /* button pressed */
-            led_on(); /* Turn on LED immediately */
-        }
-        else
-        {
-            /* button released */
-            timer_start_ms(2000); /* timeout to turn off LED */
-        }
-        button_event = false; /* clear flag */
-    }
-    else
-    {
-        /* timeout expired: turn off LED */
-        led_off();
-    }
+    led_off(); /* timeout expired: turn off LED */
 }
 
 ISR(PCINT0_vect) /* pin change interrupt service routine */
 {
-    button_event = true; /* flag indicating that next timer
-                            interrupt is due to button */
-    timer_start_ms(10); /* to reduce bounce effect. */
+    led_on();
+    timer_stop();
+    if (bit_is_set(PINB, PINB4)) /* button released */
+    {
+        timer_start_ms(2000); /* timeout to turn off LED */
+    }
 }
 
 static void button_init(void)
