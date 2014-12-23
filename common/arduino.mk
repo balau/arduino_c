@@ -47,7 +47,11 @@ CPPFLAGS += -DF_CPU=${F_CPU}
 TARGET_ARCH = -mmcu=${MCU}
 COPTFLAG = -Os
 CFLAGS += ${COPTFLAG}
-#LDFLAGS += -Xlinker -Map=$(PROG).map 
+#LDFLAGS += -Xlinker -Map=$(PROG).map
+WFLAGS += -Wall -Wextra
+CFLAGS += ${WFLAGS}
+LDFLAGS += ${WFLAGS}
+ASFLAGS += ${WFLAGS}
 
 SRC_C = $(filter %.c,${SRC})
 SRC_s = $(filter %.s,${SRC})
