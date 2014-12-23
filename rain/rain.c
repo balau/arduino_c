@@ -25,8 +25,8 @@
 
 static void rain_init(void)
 {
-    DDRD &= ~_BV(DDD7); /* D pin connected to PORTD7 */
-    DDRC &= ~_BV(DDC0); /* A pin connected to PORTC0(ADC0) */
+    DDRD &= ~_BV(DDD7); /* OUT pin connected to PORTD7 */
+    DDRC &= ~_BV(DDC0); /* AC pin connected to PORTC0(ADC0) */
     ADMUX =
           BVV(MUX0, 0) | BVV(MUX1, 0) | BVV(MUX2, 0) | BVV(MUX3, 0) /* Read ADC0 */
         | BVV(ADLAR, 1) /* Left justify */
@@ -39,29 +39,19 @@ static void rain_init(void)
         | BVV(ADEN, 1); /* Enable */
 }
 
-static bool rain_get_d(void)
-{
-    return bit_is_set(PIND, PIND7);
-}
-
 static bool rain_is_raining(void)
 {
-    return !rain_get_d(); /* d = 0 means rain */
-}
-
-static uint8_t rain_get_a(void)
-{
-    ADCSRA |= _BV(ADSC); /* Start conversion */
-    loop_until_bit_is_clear(ADCSRA, ADSC); /* Wait for end of conversion */
-    return ADCH;
+    return bit_is_clear(PIND, PIND7); /* OUT = 0 means rain */
 }
 
 static uint8_t rain_get_humidity(void)
 {
-    return 255 - rain_get_a(); /* lower means more humidity */
+    ADCSRA |= _BV(ADSC); /* Start conversion */
+    loop_until_bit_is_clear(ADCSRA, ADSC); /* Wait for end of conversion */
+    return 255 - ADCH; /* lower means more humidity */
 }
 
-static void pwm_set_ocr(uint8_t oc)
+static void pwm_set_duty_cycle(uint8_t oc)
 {
     OCR0A = oc;
 }
@@ -73,7 +63,7 @@ static void pwm_init(uint8_t oc)
           BVV(WGM00, 1) | BVV(WGM01, 1) /* Fast PWM update on OCRA */
         | BVV(COM0A1, 1) | BVV(COM0A0, 0) /* non-inverting OC0A */
         | BVV(COM0B1, 0) | BVV(COM0B0, 0); /* OC0B not connected */
-    pwm_set_ocr(oc);
+    pwm_set_duty_cycle(oc);
     TCCR0B =
           BVV(CS00, 1) | BVV(CS01, 0) | BVV(CS02, 1) /* F_CPU/1024 */
         | BVV(WGM02, 0) /* Fast PWM update on OCRA */
@@ -87,6 +77,11 @@ static void usart_init(void)
 {
     UBRR0H = UBRRH_VALUE;
     UBRR0L = UBRRL_VALUE;
+#if USE_2X
+    UCSR0A |= _BV(U2X0);
+#else
+    UCSR0A &= ~_BV(U2X0);
+#endif
     UCSR0B = BVV(TXEN0, 1) | BVV(RXEN0, 0); /* Only TX */
 }
 
@@ -162,7 +157,7 @@ int main (void)
         raining = rain_is_raining();
         humidity = rain_get_humidity();
 
-        pwm_set_ocr(humidity);
+        pwm_set_duty_cycle(humidity);
         update_gauge(raining, humidity);
         _delay_ms(100);
     }
